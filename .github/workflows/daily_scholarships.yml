@@ -1,0 +1,49 @@
+name: Autonomous Scholarship Lifecycle Engine
+
+on:
+  schedule:
+    # التشغيل التلقائي اليومي الساعة 05:00 UTC (08:00 صباحاً بتوقيت صنعاء)
+    - cron: '0 5 * * *'
+  workflow_dispatch: # يتيح لك إمكانية التشغيل اليدوي بضغطة زر من GitHub
+
+jobs:
+  run-engine:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Cache SQLite Database
+      uses: actions/cache@v3
+      with:
+        path: scholarships_lifecycle.db
+        key: sqlite-db-${{ github.run_id }}
+        restore-keys: |
+          sqlite-db-
+
+    - name: Run Application Engine
+      env:
+        ENGINE_ENV: "PRODUCTION"
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+        TEST_RECIPIENT: ${{ secrets.TEST_RECIPIENT }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        python engine.py
+
+    - name: Commit Updated Database
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action Bot"
+        git add scholarships_lifecycle.db execution.log || true
+        git commit -m "Auto-update database lifecycle state [skip ci]" || true
+        git push 
+        || true
