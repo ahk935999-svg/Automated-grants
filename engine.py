@@ -1,280 +1,128 @@
 import os
-import re
-import json
 import sqlite3
-import smtplib
 import logging
 import requests
+import feedparser
 import telebot
 import google.generativeai as genai
-import xml.etree.ElementTree as ET
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from datetime import datetime
-from typing import List, Dict, Optional, Tuple
 
-# ==============================================================================
-# 1. Logging & Global Configuration
-# ==============================================================================
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler()]
-)
+# Logging Configuration
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# Environment Variables
+RUNTIME_ENV = os.getenv("RUNTIME_ENV", "DEVELOPMENT")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 APP_PASSWORD = os.getenv("APP_PASSWORD")
 TEST_RECIPIENT = os.getenv("TEST_RECIPIENT")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Configure Gemini AI
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-# ==============================================================================
-# 2. Database Manager (Atomic SQLite with Indexing & WAL Mode)
-# ==============================================================================
-class DatabaseManager:
-    def __init__(self, db_path: str = "opportunities.db"):
-        self.db_path = db_path
-        self._init_db()
+# Database Setup
+DB_PATH = "opportunities.db"
 
-    def _get_connection(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.execute("PRAGMA journal_mode=WAL;")
-        return conn
+def init_db():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS opportunities (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT,
+            link TEXT UNIQUE,
+            summary TEXT,
+            score INTEGER,
+            status TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-    def _init_db(self):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS opportunities (
-                    id TEXT PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    link TEXT NOT NULL,
-                    source_type TEXT NOT NULL,
-                    target_email TEXT,
-                    published_date TEXT,
-                    status TEXT NOT NULL,
-                    score INTEGER DEFAULT 0,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            ''')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_status ON opportunities(status);')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_score ON opportunities(score);')
-            conn.commit()
+def evaluate_with_gemini(title, summary):
+    if not GEMINI_API_KEY:
+        logging.warning("No Gemini API key provided. Skipping AI evaluation.")
+        return 70  # Default fallback score
 
-    def exists(self, opp_id: str) -> bool:
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT 1 FROM opportunities WHERE id = ?", (opp_id,))
-            return cursor.fetchone() is not None
-
-    def save_opportunity(self, opp_data: dict, status: str, score: int):
-        with self._get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT INTO opportunities (id, title, link, source_type, target_email, published_date, status, score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                opp_data['id'], opp_data['title'], opp_data['link'],
-                opp_data['type'], opp_data['target_email'],
-                opp_data['date'], status, score
-            ))
-            conn.commit()
-
-# ==============================================================================
-# 3. Email Extraction Engine (Strict Regex Filtering)
-# ==============================================================================
-class EmailExtractor:
-    PATTERN = r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+    prompt = f"""
+    Evaluate the following opportunity for a student.
+    Title: {title}
+    Summary: {summary}
     
-    IGNORED_DOMAINS = {
-        'example.com', 'schema.org', 'w3.org', 'github.com', 
-        'sentry.io', 'google.com', 'facebook.com', 'twitter.com'
-    }
-    IGNORED_PREFIXES = (
-        'noreply', 'no-reply', 'donotreply', 'privacy@', 
-        'terms@', 'support@', 'info@github', 'abuse@'
-    )
-
-    @classmethod
-    def extract_valid_email(cls, text: str, fallback: Optional[str] = None) -> str:
-        matches = re.findall(cls.PATTERN, text)
-        for email in matches:
-            email_lower = email.lower()
-            domain = email_lower.split('@')[-1]
-            if domain in cls.IGNORED_DOMAINS:
-                continue
-            if any(email_lower.startswith(prefix) for prefix in cls.IGNORED_PREFIXES):
-                continue
-            return email
-        return fallback or TEST_RECIPIENT
-
-# ==============================================================================
-# 4. AI Analyzer Engine (Gemini 1.5 Flash - Structured JSON)
-# ==============================================================================
-class GeminiAnalyzer:
-    def __init__(self):
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
-
-    def analyze_opportunity(self, opp: dict) -> Tuple[int, str, str, str]:
-        system_prompt = """
-        You are an elite relocation strategy advisor for Anwar Waleed Al-Hakimi.
-        
-        Candidate Profile:
-        - Name: Anwar Waleed Al-Hakimi (Location: Yemen - High priority legal relocation).
-        - Field: Biomedical Engineering student (Embedded Systems, Microcontrollers, MATLAB, AI/Automation).
-        - Goal: Any legal international path (Master's/Bachelor's scholarship, ESC/UN Volunteering, Engineering/IT Internship, Vocational Training, or Humanitarian Path).
-
-        STRICT RULES FOR EMAIL DRAFTING:
-        - DO NOT mention attached files or CVs.
-        - State clearly in the text that a detailed CV/portfolio is available upon request if there is mutual interest.
-        - The email must be an initial exploratory inquiry/application expressing strong motivation and key technical strengths.
-
-        Respond ONLY in a strict JSON format matching this schema:
-        {
-            "score": <INTEGER 0-100>,
-            "reason": "<SHORT_ARABIC_EXPLANATION>",
-            "subject": "<PROFESSIONAL_ENGLISH_SUBJECT_LINE>",
-            "cover_letter": "<PROFESSIONAL_ENGLISH_EMAIL_BODY>"
-        }
-        """
-
-        prompt = f"Source: {opp['type']}\nTitle: {opp['title']}\nDescription: {opp['description']}\nContact: {opp['target_email']}"
-
+    Give a compatibility score from 0 to 100 based on general relevance and feasibility.
+    Respond with ONLY an integer number between 0 and 100.
+    """
+    
+    # Updated Gemini Model name to latest standard
+    for model_name in ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro']:
         try:
-            response = self.model.generate_content(
-                f"{system_prompt}\n\nInput Data:\n{prompt}",
-                generation_config={"response_mime_type": "application/json"}
-            )
-            data = json.loads(response.text)
-            return (
-                int(data.get("score", 0)),
-                data.get("reason", "لا توجد تفاصيل"),
-                data.get("subject", f"Inquiry: {opp['title']}"),
-                data.get("cover_letter", "")
-            )
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            score_text = response.text.strip()
+            score = int(''.join(filter(str.isdigit, score_text)))
+            return score
         except Exception as e:
-            logging.error(f"Gemini Analysis Failed: {e}")
-            return 0, "خطأ في تحليل الذكاء الاصطناعي", "", ""
+            logging.error(f"Gemini model {model_name} failed: {e}")
+            continue
 
-# ==============================================================================
-# 5. Delivery Services (SMTP & Telegram)
-# ==============================================================================
-class NotificationService:
-    def __init__(self):
-        self.bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN) if TELEGRAM_BOT_TOKEN else None
+    return 50  # Fallback if AI call completely fails
 
-    def send_telegram(self, message: str):
-        if self.bot and TELEGRAM_CHAT_ID:
-            try:
-                self.bot.send_message(TELEGRAM_CHAT_ID, message, parse_mode='HTML')
-            except Exception as e:
-                logging.error(f"Failed to send Telegram notification: {e}")
+def send_telegram_notification(title, link, score):
+    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("Telegram credentials missing.")
+        return
 
-    @staticmethod
-    def send_email(recipient: str, subject: str, body: str) -> bool:
-        if not SENDER_EMAIL or not APP_PASSWORD:
-            logging.warning("SMTP credentials missing. Skipping email delivery.")
-            return False
+    try:
+        bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
+        message = f"🎯 *فرصة جديدة متوافرة!*\n\n📌 *العنوان:* {title}\n⭐ *التقييم:* {score}%\n🔗 [رابط التفاصيل]({link})"
+        bot.send_message(TELEGRAM_CHAT_ID, message, parse_mode="Markdown")
+        logging.info("Telegram notification sent successfully!")
+    except Exception as e:
+        logging.error(f"Failed to send Telegram message: {e}")
 
-        msg = MIMEMultipart()
-        msg['From'] = SENDER_EMAIL
-        msg['To'] = recipient
-        msg['Subject'] = subject
-        msg.attach(MIMEText(body, 'plain'))
+def run_engine():
+    init_db()
+    logging.info("Starting Autonomous Relocation Engine...")
 
-        try:
-            with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as server:
-                server.starttls()
-                server.login(SENDER_EMAIL, APP_PASSWORD)
-                server.send_message(msg)
-            logging.info(f"Email successfully sent to: {recipient}")
-            return True
-        except Exception as e:
-            logging.error(f"SMTP Delivery Failure to {recipient}: {e}")
-            return False
-
-# ==============================================================================
-# 6. Core Orchestrator Engine
-# ==============================================================================
-class RelocationEngine:
-    SOURCES = [
-        {"url": "https://reliefweb.int/jobs/rss.xml", "type": "UN / NGO International Jobs & Volunteering"},
-        {"url": "https://www.scholarshipsads.com/category/country/europe/feed/", "type": "European Scholarships & Grants"},
-        {"url": "https://www.opportunitydesk.org/feed/", "type": "Global Fellowships & Grants"},
-        {"url": "https://remotive.com/remote-jobs/feed", "type": "International Tech & Engineering Jobs"}
+    rss_feeds = [
+        "https://opportunitydesk.org/feed/",
+        "https://www.scholarshipsads.com/feed/"
     ]
 
-    def __init__(self):
-        self.db = DatabaseManager()
-        self.analyzer = GeminiAnalyzer()
-        self.notifier = NotificationService()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-    def fetch_feed(self, source: dict) -> List[dict]:
-        items = []
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        try:
-            response = requests.get(source['url'], headers=headers, timeout=15)
-            root = ET.fromstring(response.content)
-            for item in root.findall('.//item')[:5]:
-                title = item.find('title').text if item.find('title') is not None else "Untitled"
-                link = item.find('link').text if item.find('link') is not None else ""
-                pub_date = item.find('pubDate').text if item.find('pubDate') is not None else str(datetime.now())
-                desc = item.find('description').text if item.find('description') is not None else ""
-                
-                clean_desc = re.sub(r'<[^>]+>', ' ', desc)
-                opp_id = str(hash(title + link))
-                target_email = EmailExtractor.extract_valid_email(clean_desc)
+    for feed_url in rss_feeds:
+        logging.info(f"Processing source: {feed_url}")
+        feed = feedparser.parse(feed_url)
 
-                items.append({
-                    "id": opp_id,
-                    "title": title.strip(),
-                    "link": link.strip(),
-                    "type": source['type'],
-                    "date": pub_date,
-                    "description": clean_desc[:2500],
-                    "target_email": target_email
-                })
-        except Exception as e:
-            logging.error(f"Error fetching feed {source['url']}: {e}")
-        return items
+        for entry in feed.entries[:5]:  # Process latest 5 entries
+            title = entry.get('title', 'No Title')
+            link = entry.get('link', '')
+            summary = entry.get('summary', '')
 
-    def run(self):
-        logging.info("Starting Autonomous Relocation Engine v4.0...")
-        
-        for source in self.SOURCES:
-            logging.info(f"Processing source: {source['type']}")
-            opportunities = self.fetch_feed(source)
-            
-            for opp in opportunities:
-                if self.db.exists(opp['id']):
-                    continue
+            # Check if already processed
+            cursor.execute("SELECT id FROM opportunities WHERE link = ?", (link,))
+            if cursor.fetchone():
+                continue
 
-                score, reason, subject, cover_letter = self.analyzer.analyze_opportunity(opp)
-                
-                # Threshold for action
-                if score >= 65:
-                    email_sent = NotificationService.send_email(opp['target_email'], subject, cover_letter)
-                    status = "APPLIED_VIA_EMAIL" if email_sent else "EMAIL_FAILED"
+            score = evaluate_with_gemini(title, summary)
+            status = "QUALIFIED" if score >= 60 else "DISQUALIFIED"
 
-                    msg = (
-                        f"🎯 <b>فرصة استكشافية عالية التقييم ({score}%)</b>\n\n"
-                        f"<b>المصدر:</b> {opp['type']}\n"
-                        f"<b>العنوان:</b> {opp['title']}\n"
-                        f"<b>الجهة:</b> <code>{opp['target_email']}</code>\n\n"
-                        f"<b>تحليل الاستراتيجية:</b>\n{reason}\n\n"
-                        f"✉️ <i>تنزيل السيرة الذاتية مُعطل - تم إرسال خطاب استفسار مبدئي وتوفير السيرة عند الطلب.</i>\n\n"
-                        f"🔗 <a href='{opp['link']}'>رابط تفاصيل الفرصة</a>"
-                    )
-                    self.notifier.send_telegram(msg)
-                else:
-                    status = "DISQUALIFIED_BY_AI"
+            cursor.execute('''
+                INSERT INTO opportunities (title, link, summary, score, status)
+                VALUES (?, ?, ?, ?, ?)
+            ''', (title, link, summary, score, status))
+            conn.commit()
 
-                self.db.save_opportunity(opp, status, score)
+            logging.info(f"Item: {title} | Score: {score} | Status: {status}")
+
+            if status == "QUALIFIED":
+                send_telegram_notification(title, link, score)
+
+    conn.close()
 
 if __name__ == "__main__":
-    engine = RelocationEngine()
-    engine.run()
+    run_engine()
