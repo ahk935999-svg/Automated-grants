@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "erasmus_mundus_official",
+      "name": "Erasmus Mundus Joint Masters",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "erasmus-plus.ec.europa.eu",
+      "url": "https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters",
+      "capabilities": ["masters", "fully_funded"],
+      "enabled": true
+    },
+    {
+      "id": "eures_official",
+      "name": "EURES",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "eures.europa.eu",
+      "url": "https://eures.europa.eu/index_en",
+      "capabilities": ["work", "mobility"],
+      "enabled": true
+    },
+    {
+      "id": "opportunitydesk_rss",
+      "name": "OpportunityDesk",
+      "kind": "rss",
+      "trust": "aggregator",
+      "domain": "opportunitydesk.org",
+      "feed_url": "https://opportunitydesk.org/feed/",
+      "capabilities": ["scholarship", "fellowship", "internship"],
+      "enabled": true
+    },
+    {
+      "id": "scholarshipsads_rss",
+      "name": "ScholarshipsAds",
+      "kind": "rss",
+      "trust": "aggregator",
+      "domain": "scholarshipsads.com",
+      "feed_url": "https://www.scholarshipsads.com/feed/",
+      "capabilities": ["scholarship"],
+      "enabled": true
+    }
+  ]
+}
