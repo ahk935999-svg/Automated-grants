@@ -2,7 +2,7 @@ from core.application_ops import build_plan
 from core.eligibility import assess
 from core.models import Opportunity
 from core.profile import validate_profile
-from core.scoring import deterministic_evaluation,funding_score,urgency_score
+from core.scoring import deterministic_evaluation,funding_score,infer_deadline,urgency_score
 from core.verification import verify_url
 
 def base_profile():
@@ -29,6 +29,11 @@ def test_funding_score():
 
 def test_urgency_invalid_is_safe():
     assert urgency_score("not-a-date")==10.0
+
+
+def test_named_deadline_is_parsed():
+    assert infer_deadline("Application deadline: October 15, 2026")=="2026-10-15"
+    assert infer_deadline("Applications close 15 October 2026")=="2026-10-15"
 
 def test_profile_validation():
     assert validate_profile(base_profile())==[]
