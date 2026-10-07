@@ -1,6 +1,4 @@
 from html.parser import HTMLParser
-from urllib.parse import urlparse
-
 import requests
 
 from .network import is_public_host
