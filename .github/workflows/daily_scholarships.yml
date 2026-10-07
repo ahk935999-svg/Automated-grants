@@ -44,7 +44,7 @@ jobs:
       - name: Preflight
         env:
           APPLICANT_PROFILE_JSON: ${{ secrets.APPLICANT_PROFILE_JSON }}
-        run: python scripts/preflight.py
+        run: python -m scripts.preflight
 
       - name: Lint
         run: ruff check .
