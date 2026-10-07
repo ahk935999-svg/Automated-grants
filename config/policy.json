@@ -1,0 +1,21 @@
+{
+  "auto": {
+    "discover": true,
+    "evaluate": true,
+    "draft_application": true,
+    "send_email": false,
+    "submit_application": false
+  },
+  "human_gates": [
+    "legal_declaration",
+    "captcha",
+    "mfa",
+    "signature",
+    "payment",
+    "unknown_fact",
+    "untrusted_destination",
+    "identity_sensitive_upload"
+  ],
+  "priority_threshold": 70,
+  "minimum_confidence_for_auto_draft": 65
+}
