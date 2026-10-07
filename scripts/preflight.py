@@ -8,14 +8,14 @@ from core.sources import load_registry
 
 def main():
     settings=Settings()
-    paths=(Path(settings.profile_path),Path("config/source_registry.json"),Path("config/policy.json"))
-    for path in paths:
-        if not path.exists() and path != Path(settings.profile_path):
+    for path in (Path(settings.profile_path),Path("config/source_registry.json"),Path("config/policy.json")):
+        if not path.exists():
             raise SystemExit(f"MISSING: {path}")
 
     public_profile=load_profile(settings.profile_path)
-    if sensitive_fields_present(public_profile):
-        raise SystemExit("PUBLIC PROFILE CONTAINS SENSITIVE VALUES: " + ", ".join(sensitive_fields_present(public_profile)))
+    public_sensitive=sensitive_fields_present(public_profile)
+    if public_sensitive:
+        raise SystemExit("PUBLIC PROFILE CONTAINS SENSITIVE VALUES: " + ", ".join(public_sensitive))
 
     profile=load_profile(settings.profile_path,settings.applicant_profile_json)
     errors=validate_profile(profile)
@@ -25,7 +25,7 @@ def main():
     registry=load_registry()
     for source in registry:
         if source.get("enabled") and not source.get("domain"):
-            raise SystemExit(f"SOURCE ERROR: missing domain for {source.get("id")}")
+            raise SystemExit(f"SOURCE ERROR: missing domain for {source.get("id", "unknown")}")
 
     policy=load_policy()
     required={"captcha","mfa","signature","payment","unknown_fact","untrusted_destination"}
