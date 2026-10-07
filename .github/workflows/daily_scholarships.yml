@@ -1,6 +1,8 @@
 name: Opportunity Operations
 
 on:
+  push:
+    branches: ["production-v3"]
   schedule:
     - cron: "0 5 * * *"
   workflow_dispatch:
