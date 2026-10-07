@@ -53,7 +53,6 @@ def run():
                 combined=f"{op.title} {op.summary}"
                 op.funding=op.funding or infer_funding(combined)
                 op.deadline=op.deadline or infer_deadline(combined)
-
                 verification=verify_url(op.url,trusted_domains)
                 eligibility=assess(op,profile)
                 deterministic=deterministic_evaluation(
@@ -64,7 +63,6 @@ def run():
                     deterministic,ai_data,eligibility.status,verification.status,
                     policy["priority_threshold"]
                 )
-
                 opportunity_id=upsert_opportunity(conn,op,verification,eligibility,evaluation)
                 plan=build_plan(op,profile,verification,eligibility)
 
@@ -107,14 +105,9 @@ def run():
                     priority_items.append((op.title,op.url,evaluation["overall_priority"],actual_state))
 
                 report["opportunities"].append({
-                    "id":opportunity_id,
-                    "title":op.title,
-                    "url":op.url,
-                    "source":op.source,
-                    "verification":verification.__dict__,
-                    "eligibility":eligibility.__dict__,
-                    "evaluation":evaluation,
-                    "application_id":application_id,
+                    "id":opportunity_id,"title":op.title,"url":op.url,"source":op.source,
+                    "verification":verification.__dict__,"eligibility":eligibility.__dict__,
+                    "evaluation":evaluation,"application_id":application_id,
                     "application_state":actual_state,
                     "application_transitioned":transitioned,
                     "application_plan":plan.__dict__,
