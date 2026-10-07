@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "sources": [
     {
       "id": "erasmus_mundus_official",
@@ -19,6 +19,46 @@
       "domain": "eures.europa.eu",
       "url": "https://eures.europa.eu/index_en",
       "capabilities": ["work", "mobility"],
+      "enabled": true
+    },
+    {
+      "id": "make_it_in_germany",
+      "name": "Make it in Germany",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "make-it-in-germany.com",
+      "url": "https://www.make-it-in-germany.com/en/",
+      "capabilities": ["work", "study", "research", "vocational_training", "immigration"],
+      "enabled": true
+    },
+    {
+      "id": "canada_job_bank",
+      "name": "Canada Job Bank",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "jobbank.gc.ca",
+      "url": "https://www.jobbank.gc.ca/home",
+      "capabilities": ["work"],
+      "enabled": true
+    },
+    {
+      "id": "manaaki_nz",
+      "name": "Manaaki New Zealand Scholarships",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "nzscholarships.govt.nz",
+      "url": "https://www.nzscholarships.govt.nz/",
+      "capabilities": ["undergraduate", "postgraduate", "scholarship"],
+      "enabled": true
+    },
+    {
+      "id": "commonwealth_scholarships",
+      "name": "Commonwealth Scholarship Commission",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "cscuk.fcdo.gov.uk",
+      "url": "https://cscuk.fcdo.gov.uk/about-us/scholarships/",
+      "capabilities": ["masters", "phd", "fellowship"],
       "enabled": true
     },
     {
