@@ -41,7 +41,13 @@ def test_build_plan_inherits_detected_human_gates():
         "Test",
         "https://eures.europa.eu/jobs",
         "EURES",
-        raw={"detail_text": "Upload your passport and complete two-factor authentication."},
+        raw={
+            "eligibility": {
+                "eligible_nationalities": ["*"],
+                "required_degree_level": "master",
+            },
+            "detail_text": "Upload your passport and complete two-factor authentication.",
+        },
     )
     eligibility = assess(opportunity, profile())
     verification = verify_url(
