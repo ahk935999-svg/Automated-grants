@@ -56,39 +56,35 @@ def profile_match(opportunity, profile):
     hits = sum(1 for k in profile.get("preferences", {}).get("keywords", []) if k.lower() in haystack)
     return clamp(35 + hits * 15)
 
-def deterministic_evaluation(opportunity, profile, eligibility):
+def _decision(overall, threshold):
+    return "PRIORITY" if overall >= threshold else "REVIEW" if overall >= 45 else "LOW"
+
+def deterministic_evaluation(opportunity, profile, eligibility, priority_threshold=70):
     match = profile_match(opportunity, profile)
     funding = funding_score(opportunity.funding)
     urgency = urgency_score(opportunity.deadline)
-    eligibility_score = eligibility.score
-    competitiveness = 50.0
-    confidence = 60.0
     overall = clamp(
-        eligibility_score * 0.30 + match * 0.25 + funding * 0.20 +
-        urgency * 0.10 + competitiveness * 0.10 + confidence * 0.05
+        eligibility.score * 0.30 + match * 0.25 + funding * 0.20 +
+        urgency * 0.10 + 50.0 * 0.10 + 60.0 * 0.05
     )
-    if eligibility.status == "INELIGIBLE":
-        decision = "LOW"
-    else:
-        decision = "PRIORITY" if overall >= 70 else "REVIEW" if overall >= 45 else "LOW"
     return {
-        "eligibility_score": eligibility_score,
+        "eligibility_score": eligibility.score,
         "profile_match_score": match,
         "funding_score": funding,
         "urgency_score": urgency,
-        "competitiveness_score": competitiveness,
-        "confidence_score": confidence,
+        "competitiveness_score": 50.0,
+        "confidence_score": 60.0,
         "overall_priority": overall,
-        "decision": decision,
+        "decision": "LOW" if eligibility.status == "INELIGIBLE" else _decision(overall, priority_threshold),
         "reasons": eligibility.reasons + eligibility.blockers,
     }
 
-def merge_ai_scores(base, ai, eligibility_status, verification_status):
+def merge_ai_scores(base, ai, eligibility_status, verification_status, priority_threshold=70):
     if not ai:
         return base
     merged = dict(base)
     for key in ("profile_match_score", "funding_score", "urgency_score", "competitiveness_score", "confidence_score"):
-        if key in ai and isinstance(ai[key], (int, float)):
+        if isinstance(ai.get(key), (int, float)):
             merged[key] = clamp(ai[key])
     merged["eligibility_score"] = base["eligibility_score"]
     merged["overall_priority"] = clamp(
@@ -103,9 +99,9 @@ def merge_ai_scores(base, ai, eligibility_status, verification_status):
         merged["decision"] = "LOW"
         merged["overall_priority"] = min(merged["overall_priority"], 10.0)
     else:
-        merged["decision"] = "PRIORITY" if merged["overall_priority"] >= 70 else "REVIEW" if merged["overall_priority"] >= 45 else "LOW"
-    if verification_status != "VERIFIED":
-        merged["reasons"] = list(dict.fromkeys(base.get("reasons", []) + ["Destination not independently verified"]))
-    else:
-        merged["reasons"] = list(dict.fromkeys(base.get("reasons", [])))
+        merged["decision"] = _decision(merged["overall_priority"], priority_threshold)
+    merged["reasons"] = list(dict.fromkeys(
+        base.get("reasons", []) +
+        ([] if verification_status == "VERIFIED" else ["Destination not independently verified"])
+    ))
     return merged
