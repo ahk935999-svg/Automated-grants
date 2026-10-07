@@ -9,6 +9,10 @@ class Settings:
     gemini_api_key: str | None = os.getenv("GEMINI_API_KEY")
     telegram_token: str | None = os.getenv("TELEGRAM_BOT_TOKEN")
     telegram_chat_id: str | None = os.getenv("TELEGRAM_CHAT_ID")
+    smtp_host: str = os.getenv("SMTP_HOST") or "smtp.gmail.com"
+    smtp_port: int = int(os.getenv("SMTP_PORT") or "587")
+    smtp_username: str | None = os.getenv("SMTP_USERNAME")
+    smtp_password: str | None = os.getenv("SMTP_PASSWORD")
     imap_host: str = os.getenv("IMAP_HOST") or "imap.gmail.com"
     imap_port: int = int(os.getenv("IMAP_PORT") or "993")
     imap_username: str | None = os.getenv("IMAP_USERNAME")
