@@ -27,10 +27,10 @@ def infer_published_eligibility(text,nationality=""):
         marker_terms=("eligible","nationality","nationalities","citizens","applicant")
         if any(marker in lowered for marker in marker_terms):
             meta["eligible_nationalities"]=[nationality]
-    if re.search(r"\b(master'?s?|master degree|msc|m\.sc\.)\b",lowered):
-        meta["required_degree_level"]="master"
-    elif re.search(r"\b(ph\.?d\.?|doctoral|doctorate)\b",lowered):
+    if re.search(r"\b(ph\.?d\.?|doctoral|doctorate)\b",lowered):
         meta["required_degree_level"]="phd"
+    elif re.search(r"\b(master'?s?|master degree|msc|m\.sc\.)\b",lowered):
+        meta["required_degree_level"]="master"
     minimum=re.search(
         r"(?:minimum|at least|gpa of)\s*(?:a\s*)?(?:gpa\s*)?(?:of\s*)?([0-4](?:\.\d+)?)",
         lowered,
