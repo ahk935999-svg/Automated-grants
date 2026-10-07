@@ -180,6 +180,8 @@ def run():
                 "action_queue":len(report["action_queue"]),
                 "emails":len(emails),
                 "source_errors":len(source_errors),
+                "ai_evaluations":ai_used,
+                "ai_budget_remaining":ai_budget,
             }
             write_run_report(report_path,report)
             finish_run(
