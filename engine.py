@@ -16,7 +16,7 @@ from core.reporting import write_run_report
 from core.scoring import (
     deterministic_evaluation,infer_deadline,infer_funding,merge_ai_scores,
 )
-from core.sources import discover_rss,load_registry
+from core.sources import discover_sources,load_registry
 from core.verification import verify_url
 
 logger=logging.getLogger(__name__)
@@ -41,7 +41,7 @@ def run():
     with connect(settings.db_path) as conn:
         run_id=start_run(conn)
         try:
-            opportunities,source_errors=discover_rss(registry)
+            opportunities,source_errors=discover_sources(registry)
             report["sources"]=source_errors
             report["errors"].extend(source_errors)
             logger.info("Discovered %d unique opportunities",len(opportunities))
