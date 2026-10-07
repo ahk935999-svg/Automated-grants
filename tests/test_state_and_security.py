@@ -37,7 +37,7 @@ def test_unknown_eligibility_blocks_ready():
     verification=verify_url(opportunity.url,{"eures.europa.eu":"official"})
     plan=build_plan(opportunity,profile,verification,eligibility)
     assert plan.state=="INTERVENTION"
-    assert "unknown_fact" in plan.gates
+    assert "eligibility_unknown" in plan.gates
 
 def test_legacy_schema_migrates(tmp_path):
     db=str(tmp_path/"legacy.db")
