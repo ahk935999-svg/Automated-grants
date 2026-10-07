@@ -1,4 +1,6 @@
+import hashlib
 import logging
+from email.utils import parseaddr
 
 from core.action_queue import build_action_queue
 from core.ai import evaluate_with_ai
@@ -131,8 +133,15 @@ def run():
                 settings.imap_username,settings.imap_password
             )
             for item in emails:
-                insert_event(conn,"EMAIL_RECEIVED","email",item["message_id"],item)
-                report["emails"].append(item)
+                _,sender_address=parseaddr(item.get("sender",""))
+                sender_domain=sender_address.rsplit("@",1)[-1].lower() if "@" in sender_address else ""
+                safe_item={
+                    "message_id_hash":hashlib.sha256(item.get("message_id","").encode()).hexdigest(),
+                    "sender_domain":sender_domain,
+                    "category":item.get("category","general"),
+                }
+                insert_event(conn,"EMAIL_RECEIVED","email",safe_item["message_id_hash"],safe_item)
+                report["emails"].append(safe_item)
 
             if priority_items and policy["auto"].get("notify_telegram",True):
                 if settings.dry_run:
