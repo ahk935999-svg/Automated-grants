@@ -55,6 +55,7 @@ def run():
 
             detail_budget=int(policy.get("max_detail_fetches_per_run",20))
             ai_budget=int(policy.get("max_ai_evaluations_per_run",40))
+            ai_used=0
             for op in opportunities:
                 verification=verify_url(op.url,trusted_domains)
                 if verification.status=="VERIFIED" and verification.trust=="official" and detail_budget>0:
