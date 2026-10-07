@@ -15,7 +15,9 @@
     "payment",
     "unknown_fact",
     "untrusted_destination",
-    "identity_sensitive_upload"
+    "identity_sensitive_upload",
+    "eligibility_unknown",
+    "missing_document"
   ],
   "priority_threshold": 70,
   "minimum_confidence_for_auto_draft": 65
