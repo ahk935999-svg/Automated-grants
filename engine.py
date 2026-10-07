@@ -58,7 +58,7 @@ def run():
                 verification=verify_url(op.url,trusted_domains)
                 if verification.status=="VERIFIED" and verification.trust=="official" and detail_budget>0:
                     try:
-                        detail=fetch_public_page(op.url)
+                        detail=fetch_public_page(op.url, allowed_domains=trusted_domains)
                     except Exception as exc:  # noqa: BLE001
                         detail=None
                         report["errors"].append({"source":op.source,"url":op.url,"error":str(exc)})
