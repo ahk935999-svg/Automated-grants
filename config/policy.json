@@ -3,6 +3,7 @@
     "discover": true,
     "evaluate": true,
     "draft_application": true,
+    "notify_telegram": true,
     "send_email": false,
     "submit_application": false
   },
