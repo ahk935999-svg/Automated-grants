@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "sources": [
     {
       "id": "erasmus_mundus_official",
@@ -8,7 +8,10 @@
       "trust": "official",
       "domain": "erasmus-plus.ec.europa.eu",
       "url": "https://erasmus-plus.ec.europa.eu/opportunities/individuals/students/erasmus-mundus-joint-masters",
-      "capabilities": ["masters", "fully_funded"],
+      "capabilities": [
+        "masters",
+        "fully_funded"
+      ],
       "enabled": true
     },
     {
@@ -18,7 +21,10 @@
       "trust": "official",
       "domain": "eures.europa.eu",
       "url": "https://eures.europa.eu/index_en",
-      "capabilities": ["work", "mobility"],
+      "capabilities": [
+        "work",
+        "mobility"
+      ],
       "enabled": true
     },
     {
@@ -28,7 +34,13 @@
       "trust": "official",
       "domain": "make-it-in-germany.com",
       "url": "https://www.make-it-in-germany.com/en/",
-      "capabilities": ["work", "study", "research", "vocational_training", "immigration"],
+      "capabilities": [
+        "work",
+        "study",
+        "research",
+        "vocational_training",
+        "immigration"
+      ],
       "enabled": true
     },
     {
@@ -38,7 +50,9 @@
       "trust": "official",
       "domain": "jobbank.gc.ca",
       "url": "https://www.jobbank.gc.ca/home",
-      "capabilities": ["work"],
+      "capabilities": [
+        "work"
+      ],
       "enabled": true
     },
     {
@@ -48,7 +62,11 @@
       "trust": "official",
       "domain": "nzscholarships.govt.nz",
       "url": "https://www.nzscholarships.govt.nz/",
-      "capabilities": ["undergraduate", "postgraduate", "scholarship"],
+      "capabilities": [
+        "undergraduate",
+        "postgraduate",
+        "scholarship"
+      ],
       "enabled": true
     },
     {
@@ -58,7 +76,11 @@
       "trust": "official",
       "domain": "cscuk.fcdo.gov.uk",
       "url": "https://cscuk.fcdo.gov.uk/about-us/scholarships/",
-      "capabilities": ["masters", "phd", "fellowship"],
+      "capabilities": [
+        "masters",
+        "phd",
+        "fellowship"
+      ],
       "enabled": true
     },
     {
@@ -68,7 +90,11 @@
       "trust": "aggregator",
       "domain": "opportunitydesk.org",
       "feed_url": "https://opportunitydesk.org/feed/",
-      "capabilities": ["scholarship", "fellowship", "internship"],
+      "capabilities": [
+        "scholarship",
+        "fellowship",
+        "internship"
+      ],
       "enabled": true
     },
     {
@@ -78,8 +104,102 @@
       "trust": "aggregator",
       "domain": "scholarshipsads.com",
       "feed_url": "https://www.scholarshipsads.com/feed/",
-      "capabilities": ["scholarship"],
+      "capabilities": [
+        "scholarship"
+      ],
       "enabled": true
+    },
+    {
+      "id": "campus_france",
+      "name": "Campus France",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "campusfrance.org",
+      "url": "https://www.campusfrance.org/en/",
+      "capabilities": [
+        "study",
+        "scholarship",
+        "research",
+        "mobility"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "france_visas",
+      "name": "France-Visas",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "france-visas.gouv.fr",
+      "url": "https://france-visas.gouv.fr/",
+      "capabilities": [
+        "immigration",
+        "study",
+        "work"
+      ],
+      "enabled": true,
+      "max_links": 60
+    },
+    {
+      "id": "study_in_nl",
+      "name": "Study in NL",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "studyinnl.org",
+      "url": "https://www.studyinnl.org/",
+      "capabilities": [
+        "study",
+        "scholarship",
+        "mobility"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "sweden_migration",
+      "name": "Swedish Migration Agency",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "migrationsverket.se",
+      "url": "https://www.migrationsverket.se/en/you-want-to-apply/study/higher-education.html",
+      "capabilities": [
+        "study",
+        "work",
+        "immigration"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "study_in_korea",
+      "name": "Study in Korea / GKS",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "studyinkorea.go.kr",
+      "url": "https://studyinkorea.go.kr/",
+      "capabilities": [
+        "study",
+        "scholarship",
+        "masters",
+        "research"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "canada_study",
+      "name": "Canada International Students",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "canada.ca",
+      "url": "https://www.canada.ca/en/immigration-refugees-citizenship/services/study-canada.html",
+      "capabilities": [
+        "study",
+        "work",
+        "immigration"
+      ],
+      "enabled": true,
+      "max_links": 100
     }
   ]
 }
