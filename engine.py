@@ -53,7 +53,8 @@ def run():
             intervention=0
             priority_items=[]
 
-            detail_budget=20
+            detail_budget=int(policy.get("max_detail_fetches_per_run",20))
+            ai_budget=int(policy.get("max_ai_evaluations_per_run",40))
             for op in opportunities:
                 verification=verify_url(op.url,trusted_domains)
                 if verification.status=="VERIFIED" and verification.trust=="official" and detail_budget>0:
@@ -73,7 +74,18 @@ def run():
                 deterministic=deterministic_evaluation(
                     op,profile,eligibility,policy["priority_threshold"]
                 )
-                ai_data=evaluate_with_ai(op,profile,settings.gemini_api_key)
+                ai_data=None
+                should_use_ai = (
+                    bool(settings.gemini_api_key)
+                    and ai_budget > 0
+                    and (
+                        deterministic["decision"] in {"PRIORITY", "REVIEW"}
+                        or eligibility.status == "UNKNOWN"
+                    )
+                )
+                if should_use_ai:
+                    ai_data=evaluate_with_ai(op,profile,settings.gemini_api_key)
+                    ai_budget-=1
                 evaluation=merge_ai_scores(
                     deterministic,ai_data,eligibility.status,verification.status,
                     policy["priority_threshold"]
