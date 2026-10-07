@@ -113,6 +113,19 @@ def init_db(path):
                 if name not in existing:
                     conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
+def start_run(conn):
+    cursor = conn.execute("INSERT INTO runs(status) VALUES('RUNNING')")
+    return cursor.lastrowid
+
+def finish_run(conn, run_id, status, discovered, priority, emails, errors, report_path=None):
+    conn.execute(
+        """
+        UPDATE runs SET finished_at=CURRENT_TIMESTAMP,status=?,discovered_count=?,
+        priority_count=?,email_count=?,error_count=?,report_path=? WHERE id=?
+        """,
+        (status, discovered, priority, emails, errors, report_path, run_id),
+    )
+
 def upsert_opportunity(conn, op, verification, eligibility, evaluation):
     conn.execute(
         """
@@ -123,36 +136,23 @@ def upsert_opportunity(conn, op, verification, eligibility, evaluation):
          competitiveness_score,confidence_score,overall_priority,decision,status,last_seen_at)
         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
         ON CONFLICT(url) DO UPDATE SET
-          title=excluded.title,
-          source=excluded.source,
-          source_trust=excluded.source_trust,
-          summary=excluded.summary,
-          country=excluded.country,
-          deadline=excluded.deadline,
-          funding=excluded.funding,
-          opportunity_type=excluded.opportunity_type,
-          verification_status=excluded.verification_status,
-          verification_reason=excluded.verification_reason,
-          eligibility_status=excluded.eligibility_status,
-          eligibility_reasons=excluded.eligibility_reasons,
-          blockers=excluded.blockers,
-          eligibility_score=excluded.eligibility_score,
-          profile_match_score=excluded.profile_match_score,
-          funding_score=excluded.funding_score,
-          urgency_score=excluded.urgency_score,
-          competitiveness_score=excluded.competitiveness_score,
-          confidence_score=excluded.confidence_score,
-          overall_priority=excluded.overall_priority,
-          decision=excluded.decision,
-          status=excluded.status,
-          last_seen_at=CURRENT_TIMESTAMP,
+          title=excluded.title, source=excluded.source, source_trust=excluded.source_trust,
+          summary=excluded.summary, country=excluded.country, deadline=excluded.deadline,
+          funding=excluded.funding, opportunity_type=excluded.opportunity_type,
+          verification_status=excluded.verification_status, verification_reason=excluded.verification_reason,
+          eligibility_status=excluded.eligibility_status, eligibility_reasons=excluded.eligibility_reasons,
+          blockers=excluded.blockers, eligibility_score=excluded.eligibility_score,
+          profile_match_score=excluded.profile_match_score, funding_score=excluded.funding_score,
+          urgency_score=excluded.urgency_score, competitiveness_score=excluded.competitiveness_score,
+          confidence_score=excluded.confidence_score, overall_priority=excluded.overall_priority,
+          decision=excluded.decision, status=excluded.status, last_seen_at=CURRENT_TIMESTAMP,
           updated_at=CURRENT_TIMESTAMP
         """,
         (
             op.title, op.url, op.source, verification.trust, op.summary, op.country,
-            op.deadline, op.funding, op.opportunity_type,
-            verification.status, verification.reason,
-            eligibility.status, json.dumps(eligibility.reasons, ensure_ascii=False),
+            op.deadline, op.funding, op.opportunity_type, verification.status,
+            verification.reason, eligibility.status,
+            json.dumps(eligibility.reasons, ensure_ascii=False),
             json.dumps(eligibility.blockers, ensure_ascii=False),
             evaluation["eligibility_score"], evaluation["profile_match_score"],
             evaluation["funding_score"], evaluation["urgency_score"],
@@ -169,14 +169,14 @@ def upsert_application(conn, opportunity_id, state, intervention=None, notes="")
         INSERT INTO applications(opportunity_id,state,intervention,notes)
         VALUES(?,?,?,?)
         ON CONFLICT(opportunity_id) DO UPDATE SET
-          state=excluded.state,
-          intervention=excluded.intervention,
-          notes=excluded.notes,
-          updated_at=CURRENT_TIMESTAMP
+          state=excluded.state, intervention=excluded.intervention,
+          notes=excluded.notes, updated_at=CURRENT_TIMESTAMP
         """,
         (opportunity_id, state, intervention, notes),
     )
-    return conn.execute("SELECT id FROM applications WHERE opportunity_id=?", (opportunity_id,)).fetchone()["id"]
+    return conn.execute(
+        "SELECT id FROM applications WHERE opportunity_id=?", (opportunity_id,)
+    ).fetchone()["id"]
 
 def insert_event(conn, event_type, entity_type, entity_id=None, payload=None):
     conn.execute(
