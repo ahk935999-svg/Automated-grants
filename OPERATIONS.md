@@ -38,4 +38,6 @@ Persistent browser sessions, CAPTCHA/MFA handling, identity-sensitive uploads, a
 
 ## State persistence
 
-CI keeps a lightweight SQLite continuity cache and a per-run report artifact. The cache is best-effort and must not be treated as a durable backup or the long-term source of truth.
+During the public-repository development phase, CI does not cache the SQLite database. This is intentional because GitHub cache contents can be readable across repository workflows and must never carry private email/application data. Each run writes only a redacted run report artifact.
+
+After the repository is made private, durable continuity can be re-enabled through a separately reviewed state-storage design. SQLite remains an operational cache, not the authoritative long-term source of truth.
