@@ -66,6 +66,9 @@ def infer_deadline(text):
             day,month=int(first),int(MONTHS[second.lower()])
         if year is None:
             year=datetime.now(UTC).year
+            candidate=_valid_date(year,month,day)
+            if candidate and candidate<datetime.now(UTC).date().isoformat():
+                year+=1
         value=_valid_date(int(year),month,day)
         if value:
             return value
