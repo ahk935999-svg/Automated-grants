@@ -1,5 +1,6 @@
 import logging
 
+from core.action_queue import build_action_queue
 from core.ai import evaluate_with_ai
 from core.application_ops import build_plan
 from core.config import Settings
@@ -136,10 +137,12 @@ def run():
 
             report_path="data/latest_run.json"
             report["status"]="SUCCESS"
+            report["action_queue"]=build_action_queue(report["opportunities"])
             report["summary"]={
                 "discovered":len(opportunities),
                 "priority":int(priority),
                 "intervention":int(intervention),
+                "action_queue":len(report["action_queue"]),
                 "emails":len(emails),
                 "source_errors":len(source_errors),
             }
