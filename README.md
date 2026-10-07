@@ -1,45 +1,44 @@
 # Automated Grants / Opportunity Operations System
 
-This repository is the foundation for an autonomous, human-in-the-loop opportunity and relocation operations system.
-
-## Mission
-
-Continuously discover legal opportunities relevant to the applicant: fully funded study, scholarships, research, fellowships, work, volunteering, exchanges, and lawful immigration pathways.
-
-The system must never invent applicant facts, fabricate documents, forge evidence, or make false legal declarations.
+An autonomous, human-in-the-loop opportunity operations system for legal international study, work, research, fellowships, volunteering, exchanges, and relocation pathways.
 
 ## Architecture
 
-Applicant Profile -> Discovery -> Verification -> Deterministic Eligibility -> AI Evaluation -> Priority -> Application Preparation -> Human Gate -> Submission -> Email Intelligence -> Tracking
+Applicant Profile -> Source Discovery -> Verification -> Deterministic Eligibility -> AI Context -> Priority -> Application Plan -> Human Gate -> Submission Adapter -> Email Intelligence -> Tracking
 
-## production-v3
+## Production-v3
 
-- Structured applicant profile
-- RSS discovery
-- Deterministic scoring before optional AI
-- Separate eligibility, profile match, funding, urgency, competitiveness, confidence, and overall priority metrics
-- SQLite opportunity, application, event, and email state
-- Email classification for common application outcomes
-- Telegram priority notifications
-- GitHub Actions daily execution
-- Automated tests
-- Dry-run default for outbound Telegram behavior
+- Registry-driven source discovery with RSS adapters
+- Official-source registry and destination verification
+- Conservative deterministic eligibility checks
+- Separate scores for eligibility, profile match, funding, urgency, competitiveness, confidence, and overall priority
+- Optional Gemini context scoring that cannot override deterministic ineligibility
+- SQLite state for opportunities, applications, events, emails, and run history
+- Explicit application state machine and Human Gates
+- Private applicant profile support through CI secrets
+- Preflight validation, linting, and tests
+- GitHub Actions validation and scheduled execution
+- Run-report artifacts for auditability
+- Dependabot for maintenance
 
-## Human gates
+## Decision integrity
 
-The system pauses before legal declarations, CAPTCHA/MFA, signatures, payments, identity-sensitive uploads to unverified destinations, or any answer requiring a missing applicant fact.
+A high overall_priority is an operations-priority score, not an admission probability.
+A PRIORITY result never means submitted.
+Unverified destinations, missing facts, missing documents, CAPTCHA, MFA, signatures, payments, legal declarations, and identity-sensitive uploads remain Human Gates.
 
-## Security
+## Security boundary
 
-Never commit passports, credentials, API keys, email passwords, or private keys. Use GitHub Secrets or secure external storage.
+The public profile file is a safe template only. Put real private applicant facts in the APPLICANT_PROFILE_JSON secret or a local ignored profile file.
+Never commit passports, credentials, API keys, session cookies, private documents, or recovery codes.
 
-## Next modules
+## Trusted-source seed
 
-1. Official-source registry and verification adapters
-2. Deterministic eligibility rules per opportunity
-3. Application state machine and artifact vault
-4. Playwright adapters for supported application portals
-5. SMTP sending and reply-to-application matching
-6. Human intervention queue
-7. Source health and deadline monitoring
-8. Dashboard and operational metrics
+The registry currently includes official Erasmus Mundus and EURES entry points plus aggregator RSS feeds. Official domains are treated as trusted for destination verification; aggregator links remain review-required until independently verified.
+
+## Current execution boundary
+
+GitHub Actions is the discovery, validation, scoring, state, email-intelligence, and reporting worker.
+Full browser automation requires portal-specific adapters and a persistent execution environment. Generic blind form submission is intentionally disabled.
+
+See OPERATIONS.md for the runbook.
