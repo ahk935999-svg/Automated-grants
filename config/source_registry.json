@@ -1,5 +1,5 @@
 {
-  "version": 3,
+  "version": 4,
   "sources": [
     {
       "id": "erasmus_mundus_official",
@@ -196,6 +196,162 @@
       "capabilities": [
         "study",
         "work",
+        "immigration"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "daad_official",
+      "name": "DAAD Scholarships",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "daad.de",
+      "url": "https://www.daad.de/en/studying-in-germany/scholarships/daad-scholarships/",
+      "capabilities": [
+        "masters",
+        "phd",
+        "research",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "daad_funding_guide",
+      "name": "DAAD Funding Guide",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "funding-guide.de",
+      "url": "https://www.funding-guide.de/",
+      "capabilities": [
+        "masters",
+        "phd",
+        "research",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "chevening_official",
+      "name": "Chevening Scholarships",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "chevening.org",
+      "url": "https://www.chevening.org/scholarships/",
+      "capabilities": [
+        "masters",
+        "fully_funded",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "stipendium_hungaricum",
+      "name": "Stipendium Hungaricum",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "stipendiumhungaricum.hu",
+      "url": "https://stipendiumhungaricum.hu/apply/",
+      "capabilities": [
+        "bachelor",
+        "masters",
+        "phd",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "turkiye_scholarships",
+      "name": "Türkiye Scholarships",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "turkiyeburslari.gov.tr",
+      "url": "https://turkiyeburslari.gov.tr/",
+      "capabilities": [
+        "bachelor",
+        "masters",
+        "phd",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "mext_study_in_japan",
+      "name": "Study in Japan / MEXT",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "studyinjapan.go.jp",
+      "url": "https://studyinjapan.go.jp/en/planning/scholarships/mext-scholarships/",
+      "capabilities": [
+        "undergraduate",
+        "masters",
+        "phd",
+        "research",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "swedish_institute",
+      "name": "Swedish Institute",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "si.se",
+      "url": "https://si.se/en/apply/scholarships/",
+      "capabilities": [
+        "masters",
+        "scholarship"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "uk_government_immigration",
+      "name": "UK Government Study and Work Visas",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "gov.uk",
+      "url": "https://www.gov.uk/browse/visas-immigration",
+      "capabilities": [
+        "study",
+        "work",
+        "immigration"
+      ],
+      "enabled": true,
+      "max_links": 120
+    },
+    {
+      "id": "australia_home_affairs",
+      "name": "Australian Home Affairs",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "immi.homeaffairs.gov.au",
+      "url": "https://immi.homeaffairs.gov.au/visas/getting-a-visa/visa-listing",
+      "capabilities": [
+        "study",
+        "work",
+        "immigration"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "eu_immigration_portal",
+      "name": "EU Immigration Portal",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "immigration-portal.ec.europa.eu",
+      "url": "https://immigration-portal.ec.europa.eu/",
+      "capabilities": [
+        "work",
+        "study",
+        "research",
         "immigration"
       ],
       "enabled": true,
