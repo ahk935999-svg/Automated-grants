@@ -30,3 +30,12 @@ def test_unknown_eligibility_blocks_ready():
     plan=build_plan(opportunity,profile,verification,eligibility)
     assert plan.state=="INTERVENTION"
     assert "unknown_fact" in plan.gates
+
+def test_legacy_schema_migrates(tmp_path):
+    db=str(tmp_path/"legacy.db")
+    with connect(db) as conn:
+        conn.execute("CREATE TABLE opportunities (id INTEGER PRIMARY KEY, title TEXT)")
+    init_db(db)
+    with connect(db) as conn:
+        cols={row["name"] for row in conn.execute("PRAGMA table_info(opportunities)")}
+    assert {"verification_status","eligibility_status","first_seen_at","last_seen_at"} <= cols
