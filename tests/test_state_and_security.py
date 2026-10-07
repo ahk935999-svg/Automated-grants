@@ -16,8 +16,16 @@ def test_application_state_never_regresses(tmp_path):
     db=str(tmp_path/"test.db")
     init_db(db)
     with connect(db) as conn:
-        first=upsert_application(conn,1,"SUBMITTED")
-        second=upsert_application(conn,1,"INTERVENTION")
+        conn.execute(
+            "INSERT INTO opportunities(title,url,source) VALUES(?,?,?)",
+            ("Test","https://example.org/opportunity","test")
+        )
+        opportunity_id=conn.execute(
+            "SELECT id FROM opportunities WHERE url=?",
+            ("https://example.org/opportunity",)
+        ).fetchone()["id"]
+        first=upsert_application(conn,opportunity_id,"SUBMITTED")
+        second=upsert_application(conn,opportunity_id,"INTERVENTION")
     assert first[1]=="SUBMITTED"
     assert second[1]=="SUBMITTED"
     assert second[2] is False
@@ -38,4 +46,4 @@ def test_legacy_schema_migrates(tmp_path):
     init_db(db)
     with connect(db) as conn:
         cols={row["name"] for row in conn.execute("PRAGMA table_info(opportunities)")}
-    assert {"verification_status","eligibility_status","first_seen_at","last_seen_at"} <= cols
+    assert {"verification_status","eligibility_status","first_seen_at","last_seen_at"}<=cols
