@@ -1,5 +1,5 @@
 {
-  "version": 4,
+  "version": 5,
   "sources": [
     {
       "id": "erasmus_mundus_official",
@@ -353,6 +353,36 @@
         "study",
         "research",
         "immigration"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "european_solidarity_corps",
+      "name": "European Solidarity Corps",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "youth.europa.eu",
+      "url": "https://youth.europa.eu/solidarity/organisations/documents-resources_en",
+      "capabilities": [
+        "volunteering",
+        "exchange",
+        "mobility"
+      ],
+      "enabled": true,
+      "max_links": 100
+    },
+    {
+      "id": "euraxess",
+      "name": "EURAXESS",
+      "kind": "official_web",
+      "trust": "official",
+      "domain": "euraxess.ec.europa.eu",
+      "url": "https://euraxess.ec.europa.eu/jobs",
+      "capabilities": [
+        "research",
+        "work",
+        "mobility"
       ],
       "enabled": true,
       "max_links": 100
