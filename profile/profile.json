@@ -1,0 +1,55 @@
+{
+  "identity": {
+    "nationality": "Yemeni",
+    "country_of_residence": "Yemen",
+    "passport_number": "",
+    "date_of_birth": "",
+    "email": "",
+    "phone": ""
+  },
+  "education": {
+    "degree_level": "Bachelor",
+    "field": "Biomedical Engineering",
+    "institution": "",
+    "graduation_year": "",
+    "gpa": ""
+  },
+  "languages": {
+    "arabic": "native",
+    "english": ""
+  },
+  "experience": [],
+  "projects": [],
+  "skills": [],
+  "certifications": [],
+  "preferences": {
+    "opportunity_types": [
+      "fully_funded_masters",
+      "scholarship",
+      "research",
+      "fellowship",
+      "work",
+      "volunteering",
+      "exchange",
+      "legal_immigration"
+    ],
+    "countries": [],
+    "keywords": [
+      "biomedical engineering",
+      "medical devices",
+      "clinical engineering",
+      "medical technology",
+      "health technology",
+      "research"
+    ],
+    "minimum_funding": "fully_funded_preferred"
+  },
+  "documents": {
+    "cv": "",
+    "transcript": "",
+    "degree": "",
+    "passport": "",
+    "certificates": [],
+    "recommendations": []
+  }
+}

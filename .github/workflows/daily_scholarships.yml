@@ -1,52 +1,101 @@
-name: Autonomous Scholarship Lifecycle Engine
+name: Opportunity Operations
 
 on:
+  push:
+    branches: ["production-v3"]
+  pull_request:
+    branches: ["production-v3", "main"]
   schedule:
-    - cron: '0 5 * * *'
+    - cron: "0 5 * * *"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Keep outbound notifications disabled"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: opportunity-operations-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  run-engine:
+  validate:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v6
 
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v4
+      - name: Python
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10'
+          python-version: "3.12"
+          cache: "pip"
 
-      - name: Install Dependencies
+      - name: Build marker
+        run: echo "production-v3 validation"
+
+      - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install requests pyTelegramBotAPI google-generativeai
+          pip install -r requirements.txt
 
-      - name: Cache SQLite Database
-        uses: actions/cache@v3
-        with:
-          path: opportunities.db
-          key: sqlite-db-${{ github.run_id }}
-          restore-keys: |
-            sqlite-db-
-
-      - name: Run Application Engine
+      - name: Preflight
         env:
-          RUNTIME_ENV: "PRODUCTION"
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
-          TEST_RECIPIENT: ${{ secrets.TEST_RECIPIENT }}
+          APPLICANT_PROFILE_JSON: ${{ secrets.APPLICANT_PROFILE_JSON }}
+        run: python -m scripts.preflight
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        run: pytest
+
+  integration:
+    if: github.event_name != 'pull_request'
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run engine
+        env:
+          RUNTIME_ENV: PRODUCTION
+          DB_PATH: data/opportunities.db
+          PROFILE_PATH: profile/profile.json
+          APPLICANT_PROFILE_JSON: ${{ secrets.APPLICANT_PROFILE_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          python engine.py
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
+          IMAP_USERNAME: ${{ secrets.IMAP_USERNAME }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+        run: python engine.py
 
-      - name: Commit Updated Database
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action Bot"
-          git add opportunities.db || true
-          git commit -m "Auto-update database [skip ci]" || true
-          git push || true
+      - name: Upload run report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: opportunity-run-${{ github.run_id }}
+          path: data/latest_run.json
+          if-no-files-found: warn
+          retention-days: 14
