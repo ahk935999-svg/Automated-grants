@@ -1,0 +1,15 @@
+# Secrets and runtime state
+.env
+.env.*
+!.env.example
+*.db
+*.sqlite
+*.sqlite3
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+*.pem
+*.key
+secrets/
+data/runtime/
