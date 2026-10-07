@@ -18,31 +18,32 @@ class ApplicationPlan:
     gates: list[str]
     next_action: str
 
-def build_plan(opportunity, profile, verification):
+def build_plan(opportunity, profile, verification, eligibility):
+    if eligibility.status == "INELIGIBLE":
+        return ApplicationPlan("REJECTED", [], [], "Do not apply: deterministic eligibility blocker")
+
     documents = profile.get("documents", {})
     missing = [key for key in ("cv", "transcript", "degree") if not documents.get(key)]
-
     gates = []
+
     if verification.status != "VERIFIED":
         gates.append("untrusted_destination")
-
     if not profile.get("identity", {}).get("email"):
         gates.append("unknown_fact")
-
     if missing:
         gates.append("unknown_fact")
 
     if gates:
         return ApplicationPlan(
-            state="INTERVENTION",
-            missing_documents=missing,
-            gates=sorted(set(gates)),
-            next_action="Complete missing profile/documents and verify destination before submission"
+            "INTERVENTION",
+            missing,
+            sorted(set(gates)),
+            "Resolve gates before submission"
         )
 
     return ApplicationPlan(
-        state="READY",
-        missing_documents=[],
-        gates=[],
-        next_action="Application may enter the submission adapter after final human gates"
+        "READY",
+        [],
+        [],
+        "Ready for a supported submission adapter, subject to final human gates"
     )
