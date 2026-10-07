@@ -4,6 +4,7 @@ from core.action_queue import build_action_queue
 from core.ai import evaluate_with_ai
 from core.application_ops import build_plan
 from core.config import Settings
+from core.detail_fetch import fetch_public_page
 from core.db import (
     connect,finish_run,init_db,insert_event,start_run,
     upsert_application,upsert_opportunity,
@@ -50,11 +51,22 @@ def run():
             intervention=0
             priority_items=[]
 
+            detail_budget=20
             for op in opportunities:
-                combined=f"{op.title} {op.summary}"
-                op.funding=op.funding or infer_funding(combined)
-                op.deadline=op.deadline or infer_deadline(combined)
                 verification=verify_url(op.url,trusted_domains)
+                if verification.status=="VERIFIED" and verification.trust=="official" and detail_budget>0:
+                    try:
+                        detail=fetch_public_page(op.url)
+                    except Exception as exc:  # noqa: BLE001
+                        detail=None
+                        report["errors"].append({"source":op.source,"url":op.url,"error":str(exc)})
+                    if detail:
+                        op.raw["detail_text"]=detail
+                        op.summary=(f"{op.summary} {detail[:6000]}").strip()
+                        detail_budget-=1
+                combined=f"{op.title} {op.summary}"
+                op.funding=infer_funding(combined) or op.funding
+                op.deadline=infer_deadline(combined) or op.deadline
                 eligibility=assess(op,profile)
                 deterministic=deterministic_evaluation(
                     op,profile,eligibility,policy["priority_threshold"]
