@@ -7,8 +7,9 @@ import feedparser
 import requests
 
 from .models import Opportunity
-from .network import canonicalize_url
+from .network import canonicalize_url, is_public_host
 from .scoring import infer_deadline, infer_funding
+from .verification import verify_url
 
 DISCOVERY_KEYWORDS = (
     "scholarship", "funding", "fellowship", "grant", "master", "masters",
@@ -73,18 +74,39 @@ def extract_relevant_links(html, base_url, max_links=100):
             break
     return results
 
+def _verify_source_endpoint(source, url):
+    verification = verify_url(
+        url, {source["domain"]: source.get("trust", "unknown")}
+    )
+    if verification.status != "VERIFIED":
+        return False, verification.reason
+    if not is_public_host(verification.hostname):
+        return False, "Source endpoint does not resolve to a public address"
+    return True, ""
+
 def _discover_web_source(source, headers):
+    allowed, reason = _verify_source_endpoint(source, source["url"])
+    if not allowed:
+        return [], {"source": source["name"], "error": reason}
+
     response = requests.get(
         source["url"], headers=headers, timeout=20, allow_redirects=True
     )
     response.raise_for_status()
+    final_url = canonicalize_url(response.url)
+    allowed, reason = _verify_source_endpoint(source, final_url)
+    if not allowed:
+        return [], {
+            "source": source["name"],
+            "error": "Source redirect left registered domain: " + reason,
+        }
+
     content_type = response.headers.get("Content-Type", "").lower()
     if "text/html" not in content_type:
         return [], {"source": source["name"], "error": "Source did not return HTML"}
     if len(response.content) > 2_000_000:
         return [], {"source": source["name"], "error": "Source page exceeds 2 MB safety limit"}
 
-    final_url = canonicalize_url(response.url)
     links = extract_relevant_links(
         response.text, final_url, int(source.get("max_links", 100))
     )
@@ -126,11 +148,39 @@ def discover_sources(sources):
             continue
         try:
             if source.get("kind") == "rss":
+                allowed, reason = _verify_source_endpoint(
+                    source, source["feed_url"]
+                )
+                if not allowed:
+                    errors.append({"source": source["name"], "error": reason})
+                    continue
                 response = requests.get(
-                    source["feed_url"], headers=headers, timeout=20
+                    source["feed_url"], headers=headers, timeout=20, allow_redirects=True
                 )
                 response.raise_for_status()
-                parsed = feedparser.parse(response.content[:2_000_000])
+                final_url = canonicalize_url(response.url)
+                allowed, reason = _verify_source_endpoint(source, final_url)
+                if not allowed:
+                    errors.append({
+                        "source": source["name"],
+                        "error": "Feed redirect left registered domain: " + reason,
+                    })
+                    continue
+                if len(response.content) > 2_000_000:
+                    errors.append({
+                        "source": source["name"],
+                        "error": "Feed exceeds 2 MB safety limit",
+                    })
+                    continue
+
+                parsed = feedparser.parse(response.content)
+                if parsed.bozo and not parsed.entries:
+                    errors.append({
+                        "source": source["name"],
+                        "error": "Feed could not be parsed",
+                    })
+                    continue
+
                 for entry in parsed.entries:
                     title = entry.get("title", "Untitled").strip()
                     summary = entry.get("summary", "").strip()
@@ -149,7 +199,6 @@ def discover_sources(sources):
                             raw={
                                 "source_kind": source.get("kind"),
                                 "source_registry_id": source.get("id"),
-                                **dict(entry),
                             },
                         )
                     )
