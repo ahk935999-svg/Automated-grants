@@ -75,14 +75,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Restore opportunity state
-        uses: actions/cache/restore@v4
-        with:
-          path: data/opportunities.db
-          key: opportunity-db-${{ github.ref_name }}-${{ github.run_id }}
-          restore-keys: |
-            opportunity-db-${{ github.ref_name }}-
-
       - name: Run engine
         env:
           RUNTIME_ENV: PRODUCTION
@@ -98,13 +90,6 @@ jobs:
           IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
           DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
         run: python engine.py
-
-      - name: Save opportunity state
-        if: always()
-        uses: actions/cache/save@v4
-        with:
-          path: data/opportunities.db
-          key: opportunity-db-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Upload run report
         if: always()
