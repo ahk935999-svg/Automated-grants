@@ -1,7 +1,10 @@
-# Secrets and runtime state
+# Secrets and local runtime state
 .env
 .env.*
 !.env.example
+profile/private.json
+data/latest_run.json
+data/runtime/
 *.db
 *.sqlite
 *.sqlite3
@@ -12,4 +15,3 @@ venv/
 *.pem
 *.key
 secrets/
-data/runtime/
