@@ -87,6 +87,7 @@ def run():
                 if should_use_ai:
                     ai_data=evaluate_with_ai(op,profile,settings.gemini_api_key)
                     ai_budget-=1
+                    ai_used+=1
                 evaluation=merge_ai_scores(
                     deterministic,ai_data,eligibility.status,verification.status,
                     policy["priority_threshold"]
