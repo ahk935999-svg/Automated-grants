@@ -16,18 +16,21 @@ def canonicalize_url(url: str) -> str:
     host = hostname
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
-    if port not in (None, 443):
+    default_port = 443 if parsed.scheme.lower() == "https" else 80
+    if port not in (None, default_port):
         host = f"{host}:{port}"
     path = parsed.path or "/"
     if path != "/" and path.endswith("/"):
         path = path.rstrip("/")
     query_parts = [
         item for item in parsed.query.split("&")
-        if item and item.split("=", 1)[0].lower() not in TRACKING_PARAMS
+        if item
+        and item.split("=", 1)[0].lower() not in TRACKING_PARAMS
         and not item.split("=", 1)[0].lower().startswith("utm_")
     ]
     query = "&".join(query_parts)
-    return urlunsplit(("https", host, path, query, ""))
+    scheme = parsed.scheme.lower() or "https"
+    return urlunsplit((scheme, host, path, query, ""))
 
 def is_public_host(hostname: str) -> bool:
     if not hostname:
