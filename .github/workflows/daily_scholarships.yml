@@ -3,49 +3,69 @@ name: Opportunity Operations
 on:
   push:
     branches: ["production-v3"]
+  pull_request:
+    branches: ["production-v3", "main"]
   schedule:
     - cron: "0 5 * * *"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Keep outbound notifications disabled"
+        required: true
+        default: true
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
-  group: opportunity-operations
+  group: opportunity-operations-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  run:
+  validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: "pip"
 
       - name: Install
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Lint
+        run: ruff check .
+
       - name: Test
-        run: pytest -q
+        run: pytest
 
       - name: Run engine
         env:
           RUNTIME_ENV: PRODUCTION
           DB_PATH: data/opportunities.db
-          DRY_RUN: "true"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          IMAP_HOST: ${{ secrets.IMAP_HOST }}
+          IMAP_PORT: ${{ secrets.IMAP_PORT }}
+          IMAP_USERNAME: ${{ secrets.IMAP_USERNAME }}
+          IMAP_PASSWORD: ${{ secrets.IMAP_PASSWORD }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
         run: python engine.py
 
-      - name: Persist runtime database
-        run: |
-          git config user.name "opportunity-operations[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/opportunities.db
-          git diff --cached --quiet || git commit -m "chore: update opportunity state [skip ci]"
-          git push
+      - name: Upload run report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: opportunity-run-${{ github.run_id }}
+          path: data/latest_run.json
+          if-no-files-found: warn
+          retention-days: 14
