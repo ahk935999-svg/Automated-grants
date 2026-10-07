@@ -20,7 +20,10 @@ from core.sources import discover_rss,load_registry
 from core.verification import verify_url
 
 logger=logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO,format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 
 def run():
     settings=Settings()
@@ -53,7 +56,9 @@ def run():
 
                 verification=verify_url(op.url,trusted_domains)
                 eligibility=assess(op,profile)
-                deterministic=deterministic_evaluation(op,profile,eligibility,policy["priority_threshold"])
+                deterministic=deterministic_evaluation(
+                    op,profile,eligibility,policy["priority_threshold"]
+                )
                 ai_data=evaluate_with_ai(op,profile,settings.gemini_api_key)
                 evaluation=merge_ai_scores(
                     deterministic,ai_data,eligibility.status,verification.status,
@@ -98,11 +103,8 @@ def run():
                 is_priority=evaluation["decision"]=="PRIORITY"
                 priority+=is_priority
                 intervention+=actual_state=="INTERVENTION"
-
                 if is_priority:
-                    priority_items.append(
-                        (op.title,op.url,evaluation["overall_priority"],actual_state)
-                    )
+                    priority_items.append((op.title,op.url,evaluation["overall_priority"],actual_state))
 
                 report["opportunities"].append({
                     "id":opportunity_id,
@@ -126,16 +128,18 @@ def run():
                 insert_event(conn,"EMAIL_RECEIVED","email",item["message_id"],item)
                 report["emails"].append(item)
 
-            if priority_items and policy["auto"].get("send_email",False) is False:
-                report["notification"]={"telegram":"DRY_RUN" if settings.dry_run else "DISABLED_BY_POLICY"}
-
-            if priority_items and not settings.dry_run:
-                message="🎯 Opportunity priority\n\n"+"\n".join(
-                    f"• {title} | {score:.0f}/100 | {state}\n{url}"
-                    for title,url,score,state in priority_items[:10]
-                )
-                sent=telegram_send(settings.telegram_token,settings.telegram_chat_id,message)
-                report["notification"]={"telegram":"SENT" if sent else "FAILED"}
+            if priority_items and policy["auto"].get("notify_telegram",True):
+                if settings.dry_run:
+                    report["notification"]={"telegram":"DRY_RUN"}
+                else:
+                    message="🎯 Opportunity priority\n\n"+"\n".join(
+                        f"• {title} | {score:.0f}/100 | {state}\n{url}"
+                        for title,url,score,state in priority_items[:10]
+                    )
+                    sent=telegram_send(settings.telegram_token,settings.telegram_chat_id,message)
+                    report["notification"]={"telegram":"SENT" if sent else "FAILED"}
+            elif priority_items:
+                report["notification"]={"telegram":"DISABLED_BY_POLICY"}
 
             report_path="data/latest_run.json"
             report["status"]="SUCCESS"
