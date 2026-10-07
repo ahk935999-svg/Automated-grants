@@ -1,128 +1,111 @@
-import os
-import sqlite3
+import json
 import logging
-import requests
-import feedparser
-import telebot
-import google.generativeai as genai
 
-# Logging Configuration
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+from core.ai import evaluate_with_ai
+from core.config import Settings
+from core.db import connect, init_db, record_event
+from core.email_monitor import unread_messages
+from core.notifications import telegram_send
+from core.profile import load_profile, validate_profile
+from core.scoring import deterministic_evaluation
+from core.sources import discover_rss
 
-# Environment Variables
-RUNTIME_ENV = os.getenv("RUNTIME_ENV", "DEVELOPMENT")
-SENDER_EMAIL = os.getenv("SENDER_EMAIL")
-APP_PASSWORD = os.getenv("APP_PASSWORD")
-TEST_RECIPIENT = os.getenv("TEST_RECIPIENT")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
-# Configure Gemini AI
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
+def run():
+    settings = Settings()
+    init_db(settings.db_path)
 
-# Database Setup
-DB_PATH = "opportunities.db"
+    profile = load_profile()
+    errors = validate_profile(profile)
+    if errors:
+        raise RuntimeError("Invalid applicant profile: " + "; ".join(errors))
 
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS opportunities (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            title TEXT,
-            link TEXT UNIQUE,
-            summary TEXT,
-            score INTEGER,
-            status TEXT
+    opportunities = discover_rss()
+    logging.info("Discovered %d RSS opportunities", len(opportunities))
+
+    priority = []
+    with connect(settings.db_path) as conn:
+        for op in opportunities:
+            deterministic = deterministic_evaluation(op, profile)
+            ai_eval = evaluate_with_ai(op, profile, settings.gemini_api_key)
+            evaluation = ai_eval.__dict__ if ai_eval else deterministic
+
+            conn.execute(
+                """
+                INSERT INTO opportunities
+                (title,url,source,summary,country,deadline,funding,opportunity_type,
+                 eligibility_score,profile_match_score,funding_score,urgency_score,
+                 competitiveness_score,confidence_score,overall_priority,decision,status)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(url) DO UPDATE SET
+                  title=excluded.title,
+                  summary=excluded.summary,
+                  source=excluded.source,
+                  eligibility_score=excluded.eligibility_score,
+                  profile_match_score=excluded.profile_match_score,
+                  funding_score=excluded.funding_score,
+                  urgency_score=excluded.urgency_score,
+                  competitiveness_score=excluded.competitiveness_score,
+                  confidence_score=excluded.confidence_score,
+                  overall_priority=excluded.overall_priority,
+                  decision=excluded.decision,
+                  status='VERIFIED',
+                  updated_at=CURRENT_TIMESTAMP
+                """,
+                (
+                    op.title, op.url, op.source, op.summary, op.country, op.deadline,
+                    op.funding, op.opportunity_type,
+                    evaluation["eligibility_score"],
+                    evaluation["profile_match_score"],
+                    evaluation["funding_score"],
+                    evaluation["urgency_score"],
+                    evaluation["competitiveness_score"],
+                    evaluation["confidence_score"],
+                    evaluation["overall_priority"],
+                    evaluation["decision"],
+                    "VERIFIED",
+                ),
+            )
+            record_event(
+                settings.db_path,
+                "OPPORTUNITY_EVALUATED",
+                "opportunity",
+                op.url,
+                json.dumps(evaluation),
+            )
+            if evaluation["decision"] == "PRIORITY":
+                priority.append((op.title, op.url, evaluation["overall_priority"]))
+
+    if priority:
+        message = "🎯 فرص ذات أولوية\n\n" + "\n".join(
+            f"• {title} | {score:.0f}/100\n{url}"
+            for title, url, score in priority[:10]
         )
-    ''')
-    conn.commit()
-    conn.close()
+        if not settings.dry_run:
+            telegram_send(settings.telegram_token, settings.telegram_chat_id, message)
 
-def evaluate_with_gemini(title, summary):
-    if not GEMINI_API_KEY:
-        logging.warning("No Gemini API key provided. Skipping AI evaluation.")
-        return 70  # Default fallback score
+    emails = unread_messages(
+        settings.imap_host,
+        settings.imap_port,
+        settings.imap_username,
+        settings.imap_password,
+    )
+    for item in emails:
+        logging.info("Email: %s | %s | %s", item["category"], item["sender"], item["subject"])
+        record_event(
+            settings.db_path,
+            "EMAIL_RECEIVED",
+            "email",
+            item["message_id"],
+            json.dumps(item),
+        )
 
-    prompt = f"""
-    Evaluate the following opportunity for a student.
-    Title: {title}
-    Summary: {summary}
-    
-    Give a compatibility score from 0 to 100 based on general relevance and feasibility.
-    Respond with ONLY an integer number between 0 and 100.
-    """
-    
-    # Updated Gemini Model name to latest standard
-    for model_name in ['gemini-2.5-flash', 'gemini-1.5-flash-latest', 'gemini-pro']:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
-            score_text = response.text.strip()
-            score = int(''.join(filter(str.isdigit, score_text)))
-            return score
-        except Exception as e:
-            logging.error(f"Gemini model {model_name} failed: {e}")
-            continue
-
-    return 50  # Fallback if AI call completely fails
-
-def send_telegram_notification(title, link, score):
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        logging.warning("Telegram credentials missing.")
-        return
-
-    try:
-        bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
-        message = f"🎯 *فرصة جديدة متوافرة!*\n\n📌 *العنوان:* {title}\n⭐ *التقييم:* {score}%\n🔗 [رابط التفاصيل]({link})"
-        bot.send_message(TELEGRAM_CHAT_ID, message, parse_mode="Markdown")
-        logging.info("Telegram notification sent successfully!")
-    except Exception as e:
-        logging.error(f"Failed to send Telegram message: {e}")
-
-def run_engine():
-    init_db()
-    logging.info("Starting Autonomous Relocation Engine...")
-
-    rss_feeds = [
-        "https://opportunitydesk.org/feed/",
-        "https://www.scholarshipsads.com/feed/"
-    ]
-
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    for feed_url in rss_feeds:
-        logging.info(f"Processing source: {feed_url}")
-        feed = feedparser.parse(feed_url)
-
-        for entry in feed.entries[:5]:  # Process latest 5 entries
-            title = entry.get('title', 'No Title')
-            link = entry.get('link', '')
-            summary = entry.get('summary', '')
-
-            # Check if already processed
-            cursor.execute("SELECT id FROM opportunities WHERE link = ?", (link,))
-            if cursor.fetchone():
-                continue
-
-            score = evaluate_with_gemini(title, summary)
-            status = "QUALIFIED" if score >= 60 else "DISQUALIFIED"
-
-            cursor.execute('''
-                INSERT INTO opportunities (title, link, summary, score, status)
-                VALUES (?, ?, ?, ?, ?)
-            ''', (title, link, summary, score, status))
-            conn.commit()
-
-            logging.info(f"Item: {title} | Score: {score} | Status: {status}")
-
-            if status == "QUALIFIED":
-                send_telegram_notification(title, link, score)
-
-    conn.close()
+    logging.info(
+        "Run complete: %d priority opportunities, %d unread emails",
+        len(priority),
+        len(emails),
+    )
 
 if __name__ == "__main__":
-    run_engine()
+    run()
