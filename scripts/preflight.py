@@ -36,7 +36,7 @@ def main():
             raise SystemExit(f"SOURCE ERROR: missing domain for {source_id}")
 
     policy=load_policy()
-    required={"captcha","mfa","signature","payment","unknown_fact","untrusted_destination"}
+    required={"captcha","mfa","signature","payment","unknown_fact","eligibility_unknown","missing_document","untrusted_destination"}
     missing=required-set(policy.get("human_gates",[]))
     if missing:
         raise SystemExit(
