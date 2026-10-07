@@ -3,6 +3,8 @@ import os
 import sqlite3
 from contextlib import contextmanager
 
+from .lifecycle import can_transition
+
 SCHEMA="""
 CREATE TABLE IF NOT EXISTS opportunities (
  id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -80,14 +82,9 @@ CREATE TABLE IF NOT EXISTS runs (
 
 MIGRATIONS={
     "opportunities":{
-        "source_trust":"TEXT",
-        "verification_status":"TEXT",
-        "verification_reason":"TEXT",
-        "eligibility_status":"TEXT",
-        "eligibility_reasons":"TEXT",
-        "blockers":"TEXT",
-        "first_seen_at":"TEXT",
-        "last_seen_at":"TEXT",
+        "source_trust":"TEXT","verification_status":"TEXT","verification_reason":"TEXT",
+        "eligibility_status":"TEXT","eligibility_reasons":"TEXT","blockers":"TEXT",
+        "first_seen_at":"TEXT","last_seen_at":"TEXT",
     }
 }
 
@@ -107,23 +104,20 @@ def connect(path):
 def init_db(path):
     with connect(path) as conn:
         conn.executescript(SCHEMA)
-        for table,columns in MIGRATIONS.items():
-            existing={row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
-            for name,definition in columns.items():
-                if name not in existing:
-                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
-            conn.execute(
-                "UPDATE opportunities SET "
-                "first_seen_at=COALESCE(first_seen_at,CURRENT_TIMESTAMP),"
-                "last_seen_at=COALESCE(last_seen_at,CURRENT_TIMESTAMP),"
-                "source_trust=COALESCE(source_trust,'unknown'),"
-                "verification_status=COALESCE(verification_status,'REVIEW'),"
-                "verification_reason=COALESCE(verification_reason,''),"
-                "eligibility_status=COALESCE(eligibility_status,'UNKNOWN'),"
-                "eligibility_reasons=COALESCE(eligibility_reasons,'[]'),"
-                "blockers=COALESCE(blockers,'[]') "
-                "WHERE id IS NOT NULL"
-            )
+        existing={row["name"] for row in conn.execute("PRAGMA table_info(opportunities)")}
+        for name,definition in MIGRATIONS["opportunities"].items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE opportunities ADD COLUMN {name} {definition}")
+        conn.execute(
+            "UPDATE opportunities SET first_seen_at=COALESCE(first_seen_at,CURRENT_TIMESTAMP),"
+            "last_seen_at=COALESCE(last_seen_at,CURRENT_TIMESTAMP),"
+            "source_trust=COALESCE(source_trust,'unknown'),"
+            "verification_status=COALESCE(verification_status,'REVIEW'),"
+            "verification_reason=COALESCE(verification_reason,''),"
+            "eligibility_status=COALESCE(eligibility_status,'UNKNOWN'),"
+            "eligibility_reasons=COALESCE(eligibility_reasons,'[]'),"
+            "blockers=COALESCE(blockers,'[]')"
+        )
 
 def start_run(conn):
     return conn.execute("INSERT INTO runs(status) VALUES('RUNNING')").lastrowid
@@ -142,10 +136,8 @@ def upsert_opportunity(conn,op,verification,eligibility,evaluation):
         status="REJECTED"
     else:
         status="REVIEW"
-
     conn.execute(
-        """
-        INSERT INTO opportunities
+        """INSERT INTO opportunities
         (title,url,source,source_trust,summary,country,deadline,funding,opportunity_type,
          verification_status,verification_reason,eligibility_status,eligibility_reasons,
          blockers,eligibility_score,profile_match_score,funding_score,urgency_score,
@@ -162,8 +154,7 @@ def upsert_opportunity(conn,op,verification,eligibility,evaluation):
           urgency_score=excluded.urgency_score,competitiveness_score=excluded.competitiveness_score,
           confidence_score=excluded.confidence_score,overall_priority=excluded.overall_priority,
           decision=excluded.decision,status=excluded.status,last_seen_at=CURRENT_TIMESTAMP,
-          updated_at=CURRENT_TIMESTAMP
-        """,
+          updated_at=CURRENT_TIMESTAMP""",
         (
             op.title,op.url,op.source,verification.trust,op.summary,op.country,op.deadline,
             op.funding,op.opportunity_type,verification.status,verification.reason,
@@ -177,20 +168,26 @@ def upsert_opportunity(conn,op,verification,eligibility,evaluation):
     )
     return conn.execute("SELECT id FROM opportunities WHERE url=?",(op.url,)).fetchone()["id"]
 
-def upsert_application(conn,opportunity_id,state,intervention=None,notes=""):
-    conn.execute(
-        """
-        INSERT INTO applications(opportunity_id,state,intervention,notes)
-        VALUES(?,?,?,?)
-        ON CONFLICT(opportunity_id) DO UPDATE SET
-          state=excluded.state,intervention=excluded.intervention,
-          notes=excluded.notes,updated_at=CURRENT_TIMESTAMP
-        """,
-        (opportunity_id,state,intervention,notes)
-    )
-    return conn.execute(
-        "SELECT id FROM applications WHERE opportunity_id=?",(opportunity_id,)
-    ).fetchone()["id"]
+def upsert_application(conn,opportunity_id,desired_state,intervention=None,notes=""):
+    existing=conn.execute(
+        "SELECT id,state FROM applications WHERE opportunity_id=?",(opportunity_id,)
+    ).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO applications(opportunity_id,state,intervention,notes) VALUES(?,?,?,?)",
+            (opportunity_id,desired_state,intervention,notes)
+        )
+        return opportunity_id,desired_state,True
+
+    current=existing["state"]
+    if current==desired_state or can_transition(current,desired_state):
+        conn.execute(
+            "UPDATE applications SET state=?,intervention=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE opportunity_id=?",
+            (desired_state,intervention,notes,opportunity_id)
+        )
+        return existing["id"],desired_state,True
+
+    return existing["id"],current,False
 
 def insert_event(conn,event_type,entity_type,entity_id=None,payload=None):
     conn.execute(
