@@ -52,7 +52,6 @@ def _is_relevant_link(url,text):
 def extract_relevant_links(html,base_url,max_links=100):
     parser=_LinkParser()
     parser.feed(html)
-    base_host=urlparse(base_url).netloc.lower()
     results=[]
     seen=set()
     for href,text in parser.links:
