@@ -1,14 +1,25 @@
-import json
 import logging
+from pathlib import Path
 
 from core.ai import evaluate_with_ai
+from core.application_ops import build_plan
 from core.config import Settings
-from core.db import connect, init_db, record_event
+from core.db import (
+    connect,
+    finish_run,
+    init_db,
+    insert_event,
+    start_run,
+    upsert_application,
+    upsert_opportunity,
+)
+from core.eligibility import assess
 from core.email_monitor import unread_messages
-from core.notifications import telegram_send
 from core.profile import load_profile, validate_profile
-from core.scoring import deterministic_evaluation
-from core.sources import discover_rss
+from core.reporting import write_run_report
+from core.scoring import deterministic_evaluation, infer_deadline, infer_funding, merge_ai_scores
+from core.sources import discover_rss, load_registry
+from core.verification import verify_url
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
@@ -19,46 +30,125 @@ def run():
     errors = validate_profile(profile)
     if errors:
         raise RuntimeError("Invalid applicant profile: " + "; ".join(errors))
-    opportunities = discover_rss()
-    logging.info("Discovered %d RSS opportunities", len(opportunities))
-    priority = []
+
+    registry = load_registry()
+    trusted_domains = {
+        item["domain"]: item["trust"]
+        for item in registry
+        if item.get("domain")
+    }
+
+    report = {
+        "status": "RUNNING",
+        "sources": [],
+        "opportunities": [],
+        "emails": [],
+        "errors": [],
+    }
+
     with connect(settings.db_path) as conn:
-        for op in opportunities:
-            deterministic = deterministic_evaluation(op, profile)
-            ai_eval = evaluate_with_ai(op, profile, settings.gemini_api_key)
-            evaluation = ai_eval.__dict__ if ai_eval else deterministic
-            conn.execute("""
-                INSERT INTO opportunities
-                (title,url,source,summary,country,deadline,funding,opportunity_type,
-                 eligibility_score,profile_match_score,funding_score,urgency_score,
-                 competitiveness_score,confidence_score,overall_priority,decision,status)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                ON CONFLICT(url) DO UPDATE SET
-                  title=excluded.title, summary=excluded.summary, source=excluded.source,
-                  eligibility_score=excluded.eligibility_score,
-                  profile_match_score=excluded.profile_match_score,
-                  funding_score=excluded.funding_score, urgency_score=excluded.urgency_score,
-                  competitiveness_score=excluded.competitiveness_score,
-                  confidence_score=excluded.confidence_score,
-                  overall_priority=excluded.overall_priority, decision=excluded.decision,
-                  status="VERIFIED", updated_at=CURRENT_TIMESTAMP
-            """, (op.title, op.url, op.source, op.summary, op.country, op.deadline, op.funding,
-                   op.opportunity_type, evaluation["eligibility_score"],
-                   evaluation["profile_match_score"], evaluation["funding_score"],
-                   evaluation["urgency_score"], evaluation["competitiveness_score"],
-                   evaluation["confidence_score"], evaluation["overall_priority"],
-                   evaluation["decision"], "VERIFIED"))
-            record_event(settings.db_path, "OPPORTUNITY_EVALUATED", "opportunity", op.url, json.dumps(evaluation))
-            if evaluation["decision"] == "PRIORITY":
-                priority.append((op.title, op.url, evaluation["overall_priority"]))
-    if priority and not settings.dry_run:
-        message = "🎯 فرص ذات أولوية\n\n" + "\n".join(f"• {t} | {s:.0f}/100\n{u}" for t,u,s in priority[:10])
-        telegram_send(settings.telegram_token, settings.telegram_chat_id, message)
-    emails = unread_messages(settings.imap_host, settings.imap_port, settings.imap_username, settings.imap_password)
-    for item in emails:
-        logging.info("Email: %s | %s | %s", item["category"], item["sender"], item["subject"])
-        record_event(settings.db_path, "EMAIL_RECEIVED", "email", item["message_id"], json.dumps(item))
-    logging.info("Run complete: %d priority opportunities, %d unread emails", len(priority), len(emails))
+        run_id = start_run(conn)
+
+        try:
+            opportunities, source_errors = discover_rss(registry)
+            report["sources"] = source_errors
+            report["errors"].extend(source_errors)
+            logging.info("Discovered %d unique opportunities", len(opportunities))
+
+            priority = 0
+            for op in opportunities:
+                combined = f"{op.title} {op.summary}"
+                if not op.funding:
+                    op.funding = infer_funding(combined)
+                if not op.deadline:
+                    op.deadline = infer_deadline(combined)
+
+                verification = verify_url(op.url, trusted_domains)
+                eligibility = assess(op, profile)
+                deterministic = deterministic_evaluation(op, profile, eligibility)
+
+                ai_data = evaluate_with_ai(op, profile, settings.gemini_api_key)
+                evaluation = merge_ai_scores(
+                    deterministic,
+                    ai_data,
+                    eligibility.status,
+                    verification.status,
+                )
+
+                opportunity_id = upsert_opportunity(
+                    conn, op, verification, eligibility, evaluation
+                )
+
+                plan = build_plan(op, profile, verification, eligibility)
+                application_id = upsert_application(
+                    conn,
+                    opportunity_id,
+                    plan.state,
+                    intervention=",".join(plan.gates) if plan.gates else None,
+                    notes=plan.next_action,
+                )
+
+                insert_event(
+                    conn,
+                    "OPPORTUNITY_EVALUATED",
+                    "opportunity",
+                    str(opportunity_id),
+                    {
+                        "verification": verification.__dict__,
+                        "eligibility": eligibility.__dict__,
+                        "evaluation": evaluation,
+                        "application_plan": plan.__dict__,
+                    },
+                )
+
+                if evaluation["decision"] == "PRIORITY":
+                    priority += 1
+
+                report["opportunities"].append({
+                    "id": opportunity_id,
+                    "title": op.title,
+                    "url": op.url,
+                    "source": op.source,
+                    "verification": verification.__dict__,
+                    "eligibility": eligibility.__dict__,
+                    "evaluation": evaluation,
+                    "application_id": application_id,
+                    "application_plan": plan.__dict__,
+                })
+
+            emails = unread_messages(
+                settings.imap_host,
+                settings.imap_port,
+                settings.imap_username,
+                settings.imap_password,
+            )
+            for item in emails:
+                insert_event(conn, "EMAIL_RECEIVED", "email", item["message_id"], item)
+                report["emails"].append(item)
+
+            report_path = "data/latest_run.json"
+            report["status"] = "SUCCESS"
+            report["summary"] = {
+                "discovered": len(opportunities),
+                "priority": priority,
+                "emails": len(emails),
+                "source_errors": len(source_errors),
+            }
+            write_run_report(report_path, report)
+            finish_run(
+                conn, run_id, "SUCCESS", len(opportunities), priority,
+                len(emails), len(source_errors), report_path
+            )
+            logging.info("Run complete: %s", report["summary"])
+            return report
+
+        except Exception as exc:
+            report["status"] = "FAILED"
+            report["errors"].append({"type": type(exc).__name__, "message": str(exc)})
+            report_path = "data/latest_run.json"
+            write_run_report(report_path, report)
+            finish_run(conn, run_id, "FAILED", len(report["opportunities"]), 0, len(report["emails"]), 1, report_path)
+            raise
 
 if __name__ == "__main__":
     run()
