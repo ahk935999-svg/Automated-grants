@@ -94,6 +94,7 @@ def connect(path):
     if directory:
         os.makedirs(directory,exist_ok=True)
     conn=sqlite3.connect(path)
+    conn.execute("PRAGMA foreign_keys=ON")
     conn.row_factory=sqlite3.Row
     try:
         yield conn
@@ -173,16 +174,17 @@ def upsert_application(conn,opportunity_id,desired_state,intervention=None,notes
         "SELECT id,state FROM applications WHERE opportunity_id=?",(opportunity_id,)
     ).fetchone()
     if not existing:
-        conn.execute(
+        cursor=conn.execute(
             "INSERT INTO applications(opportunity_id,state,intervention,notes) VALUES(?,?,?,?)",
             (opportunity_id,desired_state,intervention,notes)
         )
-        return opportunity_id,desired_state,True
+        return cursor.lastrowid,desired_state,True
 
     current=existing["state"]
     if current==desired_state or can_transition(current,desired_state):
         conn.execute(
-            "UPDATE applications SET state=?,intervention=?,notes=?,updated_at=CURRENT_TIMESTAMP WHERE opportunity_id=?",
+            "UPDATE applications SET state=?,intervention=?,notes=?,updated_at=CURRENT_TIMESTAMP "
+            "WHERE opportunity_id=?",
             (desired_state,intervention,notes,opportunity_id)
         )
         return existing["id"],desired_state,True
